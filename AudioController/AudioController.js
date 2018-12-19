@@ -1,14 +1,16 @@
 import Sound from 'react-native-sound';
 import RNAudioStreamer from 'react-native-audio-streamer';
-import { DeviceEventEmitter } from 'react-native';
+import { DeviceEventEmitter,AppState } from 'react-native';
 import MusicControl from 'react-native-music-control';
+import RNFetchBlob from 'react-native-fetch-blob'
+
 
 class AudioController {
 	//Inicializa atributos
 	constructor() {
 		this.paused = true;
 		this.playlist = [];
-
+		AppState.addEventListener('change', this._handleAppStateChange);
 		/**
 		 * Propriedades do áudio
 		 * (*) Requerido
@@ -42,6 +44,17 @@ class AudioController {
 		};
 	}
 
+	componentWillUnmount() {
+		AppState.removeEventListener('change', this._handleAppStateChange);
+	}
+
+
+	_handleAppStateChange(appState){
+		if(appState == 'background'){
+			console.log('hi')
+		}
+	}
+
 	/**
 	 * Carrega a playlist, track inicial, e seta callback
 	 * para mudança de estado do áudio e tempo atual do áudio
@@ -55,8 +68,11 @@ class AudioController {
 		this.playlist = playlist;
 
 		//Seta áudio atual como a track que o usuário passou
-		this.currentAudio = playlist[track];
-		this.currentIndex = track;
+		
+			this.currentAudio = playlist[track];
+			this.currentIndex = track;
+		
+		
 
 		//Seta listeners de mudança de estado e mudança de tempo atual do som
 		this.onChangeStatus = onChangeStatus;
@@ -67,6 +83,21 @@ class AudioController {
 		//Carrega o primeiro áudio
 		this.load(this.currentAudio, (isLoaded) => isLoaded ?
 			this.onChangeStatus(this.status.LOADED) : this.onChangeStatus(this.status.ERROR));
+
+		//Adiciona listener para monitorar o estado do player de áudio streaming
+		this.subscription = DeviceEventEmitter
+			.addListener('RNAudioStreamerStatusChanged', this.onStatusChanged.bind(this));
+	}
+
+	init1(onChangeStatus, onChangeCurrentTime) {
+
+		//Seta listeners de mudança de estado e mudança de tempo atual do som
+		this.onChangeStatus = onChangeStatus;
+		this.onChangeCurrentTime = onChangeCurrentTime;
+
+		this.onChangeStatus(this.status.LOADING);
+
+	
 
 		//Adiciona listener para monitorar o estado do player de áudio streaming
 		this.subscription = DeviceEventEmitter
@@ -96,18 +127,27 @@ class AudioController {
 		if (this.currentAudio.path) {
 			//Áudio offline, this.player será instância do Sound
 			this.type = 'offline';
-
+			const dirs = RNFetchBlob.fs.dirs
 			Sound.setCategory('Playback');
-			this.player = new Sound(this.currentAudio.path,
-				Sound.MAIN_BUNDLE,
-				(error) => {
-					if (error) return;
+			this.player = new Sound('mp3_84483.mp3','/storage/emulated/0/Download', (error) => {
+
+				console.log('hi',Sound.MAIN_BUNDLE)
+					
+				if (error){
+
+					console.log(error)
+				return;
+				} 
+
+
+				
 
 					//Executa callback se existir
 					if (isLoaded) isLoaded(() => this.player.isLoaded());
 
 					//Atualiza a duração do áudio
 					this.getDuration(seconds => {
+						console.log(seconds)
 						this.currentAudio.duration = seconds;
 					});
 				}
@@ -137,12 +177,16 @@ class AudioController {
 	}
 
 	play() {
-		if (this.playerIsNull()) return;
+		console.log('play')
+		if (this.playerIsNull()) {
+			console.log('err')
+			return};
 
 		//Da play no áudio streaming ou local
 		if (this.type === 'streaming') {
 			this.player.play();
 		} else {
+			console.log('ok')
 			this.player.play(this.onAudioFinish.bind(this));
 		}
 
@@ -160,14 +204,20 @@ class AudioController {
 		this.musicControlPlay();
 	}
 
-	pause() {
+	pause(isTrue = false) {
+		console.log('pause')
 		if (this.playerIsNull()) return;
 
 		this.player.pause();
 
-		//Salva o tempo atual do áudio
-		this.currentAudio.currentTime = parseInt(this.currentAudio.currentTime, 10);
+		 if(isTrue){
+			this.currentAudio.currentTime = 0;
+		 }else{
+			this.currentAudio.currentTime = parseInt(this.currentAudio.currentTime, 10);
 
+		 }
+
+		 
 		//Para o listener de current time
 		this.clearCurrentTimeListener();
 		this.paused = true;
@@ -255,7 +305,7 @@ class AudioController {
 			//throw 'Playlist must contain index of next audio'
 		}
 		this.currentIndex = index;
-		this.pause();
+		this.pause(true);
 		this.selectedAudio = this.playlist[this.currentIndex];
 		this.load(this.selectedAudio, (isLoaded) => {
 			this.play();
@@ -272,12 +322,19 @@ class AudioController {
 		//Atualizando currentTime na audioProps
 		this.currentTimeListener = setInterval(() => {
 			this.getCurrentTime(seconds => {
-				if (this.currentAudio.duration > 0 && seconds > this.currentAudio.duration) {
+				console.log(seconds)
+				if (this.currentAudio.duration == seconds ) {
+					this.currentAudio.currentTime = seconds;
+					this.onChangeCurrentTime(seconds);
+					console.log('ok')
 					this.player.pause();
 					this.onChangeStatus(this.status.STOPPED);
 					this.currentAudio.currentTime = 0;
 					this.clearCurrentTimeListener();
+					this.playNext()
+					
 				} else {
+					
 					this.currentAudio.currentTime = seconds;
 					this.onChangeCurrentTime(seconds);
 				}
@@ -337,19 +394,23 @@ class AudioController {
 	//------------Alterar Estados do Music Control------------//
 
 	musicControlsEnableControls() {
-		MusicControl.enableControl('skipBackward', true, { interval: 30 });
-		MusicControl.enableControl('skipForward', true, { interval: 30 });
+		
+		MusicControl.enableControl('nextTrack', true);
+		MusicControl.enableControl('previousTrack', true);
 		MusicControl.enableControl('play', true);
 		MusicControl.enableControl('pause', true);
+		
 	}
 
 	startMusicControl() {
+		
 		this.initializeMusicControlEvents();
 		MusicControl.setNowPlaying({
 			title: this.currentAudio.title, //OK
 			artwork: this.currentAudio.thumbnailUri ? this.currentAudio.thumbnailUri : this.currentAudio.thumbnailLocal, //OK
 			artist: this.currentAudio.author, //OK
-			album: this.currentAudio.author ? this.currentAudio.author : ''
+			album: this.currentAudio.author ? this.currentAudio.author : '',
+			//duration: this.getDuration( duration => duration)
 		});
 		this.musicControlsEnableControls();
 	}
@@ -402,14 +463,15 @@ class AudioController {
 			this.musicControlPause();
 		});
 		MusicControl.on('play', () => {
+			
 			this.play();
 			this.musicControlPlay();
 		});
-		MusicControl.on('skipForward', () => {
-			this.skip(30);
+		MusicControl.on('nextTrack', () => {
+			this.playNext()
 		}); // iOS only
-		MusicControl.on('skipBackward', () => {
-			this.skip(-30);
+		MusicControl.on('previousTrack', () => {
+			this.playPrevious()
 		}); // iOS only
 	}
 }

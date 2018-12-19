@@ -13,37 +13,12 @@ In order to use this component you have to set up a playlist of audio files. Tho
 
 ```js
 const playlistSample = [
-  {
-    key: 'audio01', 
-    title:'Irineu', 
-    author: 'Irineu (Classic)',
-    url: 'http://vocenaosabe.nem/eu.mp3',
-    thumbnailLocal: require('../assets/img/thumbnail.jpg')
-  }, 
-  {
-    key: 'audio02', 
-    title:'SerjaoBerranteiro',
-    author: 'Serjão',
-    url: 'http://aquitem.corage',
-    path: 'matadorDeOnca.mp3',
-    thumbnailUri: 'http://images.uncyc.org/pt/c/c1/Serj%C3%A3o_entrevista.jpg'
-  }
+  {key: 'audio01', title:'Irineu', url: 'http://vocenaosabe.nem/eu.mp3'}, 
+  {key: 'audio02', title:'SerjaoBerranteiro', url: 'http://aquitem.corage', path: 'matadorDeOnca.mp3'}
 ];
 ```
 Note that the audio objects may have other fields, but "key", "title" and "url" are required.
 By default the first track to be played is the first one on playlist array.
-
-Attributes of audio:
-
-|  Name  |  Type  |  Default  |  Description  |
-|  ----  |  ----  |  -------  |  -----------  |
-| key | String | - | Key of audio |
-| title | String | - | Title of audio |
-| url | String | - | Path to external audio |
-| path | String | - | Path to local audio |
-| thumbnailUri | String | - | Path to external thumbnail |
-| thumbnailLocal | String | - | Path to local thumbnail |
-| author | String | - | Author of audio |
 
 ### Installing
 
